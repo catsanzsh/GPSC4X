@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>RPCS5 Emulator PoC</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.4.0/p5.js"></script>
+    <style>
+        :root {
+            --bg-color: #1e1e1e;
+            --text-color: #ffffff;
+            --accent-color: #007acc;
+            --secondary-color: #323232;
+            --success-color: #4caf50;
+            --warning-color: #ff9800;
+            --error-color: #f44336;
+        }
+
+        body {
+            margin: 0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+        }
+
+        #emulator-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+        }
+
+        #canvas-container {
+            background-color: #000;
+            border-radius: 5px;
+            overflow: hidden;
+            margin-bottom: 20px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
+        }
+
+        #controls {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        button, label.button {
+            padding: 10px 20px;
+            font-size: 14px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background-color 0.3s, color 0.3s;
+            background-color: var(--accent-color);
+            color: var(--text-color);
+        }
+
+        button:hover, label.button:hover {
+            background-color: #005999;
+        }
+
+        #gameInput {
+            display: none;
+        }
+
+        #status {
+            font-size: 14px;
+            margin-bottom: 10px;
+            padding: 5px 10px;
+            border-radius: 5px;
+            background-color: var(--secondary-color);
+        }
+
+        #log {
+            width: 100%;
+            max-width: 800px;
+            height: 200px;
+            background-color: var(--secondary-color);
+            color: #00ff00;
+            font-family: monospace;
+            padding: 10px;
+            overflow-y: scroll;
+            border-radius: 5px;
+        }
+
+        #performance {
+            display: flex;
+            justify-content: space-between;
+            width: 100%;
+            max-width: 800px;
+            margin-top: 20px;
+        }
+
+        .perf-metric {
+            background-color: var(--secondary-color);
+            padding: 10px;
+            border-radius: 5px;
+            text-align: center;
+        }
+
+        .success { color: var(--success-color); }
+        .warning { color: var(--warning-color); }
+        .error { color: var(--error-color); }
+    </style>
+</head>
+<body>
+    <div id="emulator-container">
+        <h1>RPCS5 Emulator PoC</h1>
+        <div id="canvas-container"></div>
+        <div id="controls">
+            <button id="startBtn">Start</button>
+            <button id="pauseBtn">Pause</button>
+            <button id="stopBtn">Stop</button>
+            <label for="gameInput" class="button">Load Game</label>
+            <input type="file" id="gameInput" accept=".bin,.iso">
+            <button id="configBtn">Configuration</button>
+        </div>
+        <div id="status">Status: Idle</div>
+        <div id="log"></div>
+        <div id="performance">
+            <div class="perf-metric">
+                <div>FPS</div>
+                <div id="fps">0</div>
+            </div>
+            <div class="perf-metric">
+                <div>CPU Usage</div>
+                <div id="cpu-usage">0%</div>
+            </div>
+            <div class="perf-metric">
+                <div>RAM Usage</div>
+                <div id="ram-usage">0 MB</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        class CPU {
+            constructor() {
+                this.registers = new Array(256).fill(0);
+                this.pc = 0n;
+            }
+
+            executeInstruction(instruction) {
+                logMessage(`Executing instruction: 0x${instruction.toString(16).padStart(16, '0')}`, 'success');
+                this.pc += 4n;
+            }
+        }
+
+        class Memory {
+            constructor(size) {
+                this.memory = new BigUint64Array(size / 8);
+            }
+
+            read(address) {
+                return this.memory[Number(address) / 8];
+            }
+
+            write(address, value) {
+                this.memory[Number(address) / 8] = BigInt(value);
+            }
+        }
+
+        class Emulator {
+            constructor() {
+                this.cpu = new CPU();
+                this.memory = new Memory(16 * 1024 * 1024 * 1024);  // 16GB
+                this.isRunning = false;
+                this.gameLoaded = false;
+            }
+
+            loadGame(gameData) {
+                logMessage('Loading game...', 'warning');
+                for (let i = 0; i < gameData.length; i += 8) {
+                    const value = new BigUint64Array(gameData.slice(i, i + 8).buffer)[0];
+                    this.memory.write(BigInt(i), value);
+                }
+                this.gameLoaded = true;
+                logMessage('Game loaded successfully.', 'success');
+                updateStatus('Game loaded', 'success');
+            }
+
+            start() {
+                if (!this.gameLoaded) {
+                    logMessage('No game loaded!', 'error');
+                    return;
+                }
+                this.isRunning = true;
+                logMessage('Emulator started.', 'success');
+                updateStatus('Running', 'success');
+            }
+
+            pause() {
+                this.isRunning = false;
+                logMessage('Emulator paused.', 'warning');
+                updateStatus('Paused', 'warning');
+            }
+
+            stop() {
+                this.isRunning = false;
+                this.cpu.pc = 0n;
+                logMessage('Emulator stopped.', 'error');
+                updateStatus('Stopped', 'error');
+            }
+
+            runCycle() {
+                if (!this.isRunning) return;
+
+                const instruction = this.memory.read(this.cpu.pc);
+                this.cpu.executeInstruction(instruction);
+
+                if (this.cpu.pc >= BigInt(this.memory.memory.length * 8)) {
+                    this.stop();
+                }
+            }
+        }
+
+        let emulator;
+        let lastFrameTime = 0;
+        let frameCount = 0;
+
+        function setup() {
+            let canvas = createCanvas(1280, 720);
+            canvas.parent('canvas-container');
+            
+            emulator = new Emulator();
+
+            document.getElementById('startBtn').addEventListener('click', () => emulator.start());
+            document.getElementById('pauseBtn').addEventListener('click', () => emulator.pause());
+            document.getElementById('stopBtn').addEventListener('click', () => emulator.stop());
+            document.getElementById('configBtn').addEventListener('click', showConfig);
+            document.getElementById('gameInput').addEventListener('change', loadGameFromFile);
+        }
+
+        function draw() {
+            background(0);
+            fill(255);
+            textSize(32);
+            textAlign(CENTER, CENTER);
+            text('RPCS5 Emulator PoC', width / 2, height / 2);
+
+            emulator.runCycle();
+
+            // Display some emulator state
+            textSize(16);
+            textAlign(LEFT, TOP);
+            text(`PC: 0x${emulator.cpu.pc.toString(16).padStart(16, '0')}`, 10, 10);
+            text(`Registers: ${emulator.cpu.registers.slice(0, 8).join(', ')}...`, 10, 30);
+
+            // Update performance metrics
+            frameCount++;
+            if (millis() - lastFrameTime > 1000) {
+                updatePerformanceMetrics();
+                frameCount = 0;
+                lastFrameTime = millis();
+            }
+        }
+
+        function showConfig() {
+            logMessage('Configuration window opened (not implemented in this PoC)', 'warning');
+        }
+
+        function loadGameFromFile(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const gameData = new Uint8Array(e.target.result);
+                emulator.loadGame(gameData);
+            };
+            reader.readAsArrayBuffer(file);
+        }
+
+        function logMessage(message, type = 'info') {
+            const logElement = document.getElementById('log');
+            const timestamp = new Date().toLocaleTimeString();
+            logElement.innerHTML += `<span class="${type}">[${timestamp}] ${message}</span><br>`;
+            logElement.scrollTop = logElement.scrollHeight;
+        }
+
+        function updateStatus(status, type = 'info') {
+            const statusElement = document.getElementById('status');
+            statusElement.textContent = `Status: ${status}`;
+            statusElement.className = type;
+        }
+
+        function updatePerformanceMetrics() {
+            document.getElementById('fps').textContent = frameCount;
+            document.getElementById('cpu-usage').textContent = `${Math.random() * 100 | 0}%`;
+            document.getElementById('ram-usage').textContent = `${(Math.random() * 8000 + 4000) | 0} MB`;
+        }
+    </script>
+</body>
+</html>
