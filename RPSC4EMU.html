@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>PS3/PS4 Emulator PoC</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.4.0/p5.js"></script>
+</head>
+<body>
+    <script>
+        // Define CPU Class
+        class CPU {
+            constructor() {
+                this.registers = new Array(32).fill(0); // Simplified registers
+                this.pc = 0; // Program Counter
+            }
+
+            executeInstruction(instruction) {
+                // Simplified instruction execution logic
+                console.log(`Executing instruction: ${instruction}`);
+                this.pc++;
+            }
+        }
+
+        // Define Memory Class
+        class Memory {
+            constructor(size) {
+                this.memory = new Uint8Array(size);
+            }
+
+            read(address) {
+                return this.memory[address];
+            }
+
+            write(address, value) {
+                this.memory[address] = value;
+            }
+        }
+
+        // Define Emulator Class
+        class Emulator {
+            constructor() {
+                this.cpu = new CPU();
+                this.memory = new Memory(1024 * 1024); // 1MB of memory for demonstration
+            }
+
+            loadROM(rom) {
+                // Load a simplified ROM into memory
+                console.log('Loading ROM...');
+                for (let i = 0; i < rom.length; i++) {
+                    this.memory.write(i, rom[i]);
+                }
+            }
+
+            run() {
+                // Simplified run loop
+                console.log('Starting emulator...');
+                for (let i = 0; i < 10; i++) { // Run for 10 cycles as a demo
+                    let instruction = this.memory.read(this.cpu.pc);
+                    this.cpu.executeInstruction(instruction);
+                }
+                console.log('Emulation finished.');
+            }
+        }
+
+        // Set up p5.js sketch
+        function setup() {
+            createCanvas(800, 600);
+            let emulator = new Emulator();
+
+            // Example ROM (just numbers for demonstration)
+            let rom = [0x01, 0x02, 0x03, 0x04, 0x05];
+            emulator.loadROM(rom);
+            emulator.run();
+        }
+
+        function draw() {
+            background(220);
+            text('PS3/PS4 Emulator PoC', 50, 50);
+        }
+    </script>
+</body>
+</html>
