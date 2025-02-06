@@ -1,27 +1,160 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>PS3/PS4 Emulator PoC</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.4.0/p5.js"></script>
+    <style>
+        body {
+            background-color: #121212;
+            color: #fff;
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+        }
+
+        .container {
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            padding: 20px;
+            gap: 20px;
+        }
+
+        .panel {
+            background-color: #2c2c2c;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.6);
+            padding: 20px;
+            width: 48%;
+        }
+
+        .header {
+            font-size: 24px;
+            margin-bottom: 20px;
+            text-align: center;
+            font-weight: bold;
+            color: #f39c12;
+        }
+
+        .button-container {
+            display: flex;
+            gap: 20px;
+            justify-content: center;
+            margin-bottom: 20px;
+        }
+
+        .btn {
+            border-radius: 30px;
+            padding: 10px 20px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+
+        .btn-success {
+            background-color: #2ecc71;
+            border: none;
+        }
+
+        .btn-warning {
+            background-color: #f39c12;
+            border: none;
+        }
+
+        .btn-info {
+            background-color: #3498db;
+            border: none;
+        }
+
+        .log-output,
+        .system-status,
+        .memory-section,
+        .register-section {
+            margin-top: 20px;
+        }
+
+        .log-output pre,
+        .memory-section pre,
+        .register-section pre {
+            background-color: #1e1e1e;
+            padding: 15px;
+            border-radius: 10px;
+            max-height: 200px;
+            overflow-y: auto;
+            font-family: 'Courier New', monospace;
+            color: #ccc;
+        }
+
+        .memory-cell,
+        .register {
+            display: inline-block;
+            width: 80px;
+            text-align: center;
+            padding: 5px;
+            margin: 5px;
+            background-color: #444;
+            border-radius: 5px;
+            font-family: monospace;
+        }
+
+        .register {
+            background-color: #555;
+        }
+
+        .highlight {
+            background-color: #e74c3c !important;
+        }
+
+        .panel .btn:active {
+            transform: scale(0.98);
+        }
+    </style>
 </head>
+
 <body>
+    <div class="container">
+        <div class="panel left-panel">
+            <div class="header">PS3/PS4 Emulator</div>
+            <div class="button-container">
+                <button class="btn btn-success" id="startBtn">Start</button>
+                <button class="btn btn-warning" id="resetBtn">Reset</button>
+                <button class="btn btn-info" id="stepBtn">Step</button>
+                <button class="btn btn-primary" id="loadRomBtn">Load ROM</button>
+            </div>
+            <div id="status" class="system-status">Status: Idle</div>
+            <div class="log-output" id="logOutput">
+                <strong>Log:</strong>
+                <pre id="consoleLog">Initializing Emulator...</pre>
+            </div>
+        </div>
+
+        <div class="panel right-panel">
+            <div class="register-section">
+                <div><strong>Registers:</strong></div>
+                <pre id="registersOutput">Loading Registers...</pre>
+            </div>
+            <div class="memory-section">
+                <div><strong>Memory:</strong></div>
+                <pre id="memoryOutput">Loading Memory...</pre>
+            </div>
+        </div>
+    </div>
+
     <script>
-        // Define CPU Class
         class CPU {
             constructor() {
-                this.registers = new Array(32).fill(0); // Simplified registers
-                this.pc = 0; // Program Counter
+                this.registers = new Array(32).fill(0);
+                this.pc = 0;
             }
 
             executeInstruction(instruction) {
-                // Simplified instruction execution logic
-                console.log(`Executing instruction: ${instruction}`);
+                console.log(`Executing instruction: 0x${instruction.toString(16).padStart(2, '0')}`);
                 this.pc++;
             }
         }
 
-        // Define Memory Class
         class Memory {
             constructor(size) {
                 this.memory = new Uint8Array(size);
@@ -36,47 +169,92 @@
             }
         }
 
-        // Define Emulator Class
         class Emulator {
             constructor() {
                 this.cpu = new CPU();
-                this.memory = new Memory(1024 * 1024); // 1MB of memory for demonstration
+                this.memory = new Memory(1024 * 1024);
+                this.log = [];
+            }
+
+            logMessage(message) {
+                this.log.push(message);
+                document.getElementById('consoleLog').innerText = this.log.join('\n');
             }
 
             loadROM(rom) {
-                // Load a simplified ROM into memory
-                console.log('Loading ROM...');
+                this.logMessage('Loading ROM...');
                 for (let i = 0; i < rom.length; i++) {
                     this.memory.write(i, rom[i]);
                 }
+                this.updateMemoryDisplay();
             }
 
             run() {
-                // Simplified run loop
-                console.log('Starting emulator...');
-                for (let i = 0; i < 10; i++) { // Run for 10 cycles as a demo
+                this.logMessage('Starting emulator...');
+                for (let i = 0; i < 10; i++) {
                     let instruction = this.memory.read(this.cpu.pc);
                     this.cpu.executeInstruction(instruction);
+                    this.updateRegistersDisplay();
                 }
-                console.log('Emulation finished.');
+                this.logMessage('Emulation finished.');
+            }
+
+            reset() {
+                this.cpu = new CPU();
+                this.memory = new Memory(1024 * 1024);
+                this.logMessage('Emulator reset.');
+                this.updateRegistersDisplay();
+                this.updateMemoryDisplay();
+            }
+
+            updateRegistersDisplay() {
+                let registersOutput = '';
+                for (let i = 0; i < this.cpu.registers.length; i++) {
+                    registersOutput += `<span class="register">R${i}: 0x${this.cpu.registers[i].toString(16).padStart(2, '0')}</span>\n`;
+                }
+                document.getElementById('registersOutput').innerHTML = registersOutput;
+            }
+
+            updateMemoryDisplay() {
+                let memoryOutput = '';
+                for (let i = 0; i < 16; i++) {
+                    memoryOutput += `<span class="memory-cell">0x${i.toString(16).padStart(2, '0')}: 0x${this.memory.read(i).toString(16).padStart(2, '0')}</span>\n`;
+                }
+                document.getElementById('memoryOutput').innerHTML = memoryOutput;
             }
         }
 
-        // Set up p5.js sketch
+        let emulator;
+
         function setup() {
-            createCanvas(800, 600);
-            let emulator = new Emulator();
+            emulator = new Emulator();
 
-            // Example ROM (just numbers for demonstration)
-            let rom = [0x01, 0x02, 0x03, 0x04, 0x05];
-            emulator.loadROM(rom);
-            emulator.run();
+            document.getElementById('loadRomBtn').addEventListener('click', () => {
+                const input = document.createElement('input');
+                input.type = 'file';
+                input.accept = '.pkg, .bin';
+                input.onchange = (e) => {
+                    const file = e.target.files[0];
+                    if (file) {
+                        const reader = new FileReader();
+                        reader.onload = () => {
+                            const rom = new Uint8Array(reader.result);
+                            emulator.loadROM(rom);
+                            emulator.logMessage('ROM loaded successfully.');
+                        };
+                        reader.readAsArrayBuffer(file);
+                    }
+                };
+                input.click();
+            });
+
+            document.getElementById('startBtn').addEventListener('click', () => emulator.run());
+            document.getElementById('resetBtn').addEventListener('click', () => emulator.reset());
+            document.getElementById('stepBtn').addEventListener('click', () => emulator.cpu.executeInstruction(emulator.memory.read(emulator.cpu.pc)));
         }
 
-        function draw() {
-            background(220);
-            text('PS3/PS4 Emulator PoC', 50, 50);
-        }
+        setup();
     </script>
 </body>
+
 </html>
